@@ -7,7 +7,14 @@ import json
 import os
 
 app = Flask(__name__)
-CORS(app)  # Autorise les requêtes depuis React Native et Chrome Extension
+CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=False)
+
+@app.after_request
+def after_request(response):
+    response.headers.add('Access-Control-Allow-Origin', '*')
+    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+    return response
 
 # ── Chargement des modèles ────────────────────────────────────────────────
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -63,10 +70,12 @@ def preprocess(data: dict):
 def health():
     return jsonify({"status": "ok", "message": "Donation Predictor API", "models": ["RF","XGBoost","ANN"]})
 
-@app.route("/predict", methods=["POST"])
+@app.route("/predict", methods=["POST", "OPTIONS"])
 def predict():
+    if request.method == "OPTIONS":
+        return jsonify({"status": "ok"}), 200
     try:
-        data = request.get_json()
+        data = request.get_json(force=True)
         if not data:
             return jsonify({"error": "Données JSON manquantes"}), 400
 
@@ -107,12 +116,12 @@ def predict():
         return jsonify({
             "success": True,
             "classification": {
-                "xgboost": { "probability": round(xgb_proba, 4), "prediction": xgb_pred, "label": "Donnera" if xgb_pred == 1 else "Ne donnera pas" },
-                "ann": { "probability": round(ann_proba, 4) if ann_proba else None, "prediction": int(ann_proba >= 0.5) if ann_proba else None }
+                "xgboost": {"probability": round(xgb_proba, 4), "prediction": xgb_pred, "label": "Donnera" if xgb_pred == 1 else "Ne donnera pas"},
+                "ann": {"probability": round(ann_proba, 4) if ann_proba else None, "prediction": int(ann_proba >= 0.5) if ann_proba else None}
             },
             "regression": {
-                "random_forest": { "items": rf_items },
-                "ann": { "items": ann_items }
+                "random_forest": {"items": rf_items},
+                "ann": {"items": ann_items}
             },
             "recommendation": {
                 "label": recommendation,
